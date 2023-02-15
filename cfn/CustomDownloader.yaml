@@ -108,7 +108,7 @@ Resources:
             logger = logging.getLogger()
             logger.setLevel(logging.INFO)
             
-            # Env variables from CFN
+            # Env variables from CFN for Bucket name
             bucketname = os.environ.get('BucketName')
             
             CREATE = 'Create'
