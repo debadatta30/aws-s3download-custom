@@ -8,7 +8,7 @@ The ZipFile property used to specify the Lambda Function code ,cfn-response modu
 
 Requirements:
 
-  •	AWS CLI 
+  •	AWS CLI
   
   •	S3 Bucket
   
