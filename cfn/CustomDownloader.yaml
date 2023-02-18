@@ -1,0 +1,144 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: >
+    CloudFormation template to create a Custom Resource to  download a file from a url and upload it to the S3 bucket in your aws account
+Parameters:
+  LambdaFunctionName:
+    Type: String
+    MinLength: '1'
+    MaxLength: '64'
+    AllowedPattern: '[a-zA-Z][a-zA-Z0-9_-]*'
+    Description: The name of the Lambda function to be deployed
+    Default: Lambda-Download-Function
+  LambdaRoleName:
+    Type: String
+    MinLength: '1'
+    MaxLength: '64'
+    AllowedPattern: '[\w+=,.@-]+'
+    Description: The name of the IAM role used as the Lambda execution role
+    Default: Lambda-Role-Download
+  LambdaPolicyName:
+    Type: String
+    MinLength: '1'
+    MaxLength: '128'
+    AllowedPattern: '[\w+=,.@-]+'
+    Default: Lambda-Policy-Download
+  BucketName:
+    Type: String
+    MinLength: '3'
+    MaxLength: '255'
+    Description: The name of the bucket where object  need to be download
+    Default: mybucket
+  FileURL:
+    Type: String
+    MinLength: '3'
+    MaxLength: '255'
+    Description: File Name with url from where the file will be downloaded
+    Default: https://raw.githubusercontent.com/debadatta30/aws-s3download-custom/main/example.zip
+      
+Resources:
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Ref LambdaRoleName
+      Description: An execution role for a Lambda function launched by CloudFormation
+      ManagedPolicyArns:
+        - !Ref LambdaPolicy
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service: lambda.amazonaws.com
+          Action:
+          - 'sts:AssumeRole'
+      
+  LambdaPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Ref LambdaPolicyName
+      Description: Managed policy for a Lambda function launched by CloudFormation
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - 's3:GetObject'
+              - 's3:PutObject'
+            Resource: !Sub 'arn:${AWS::Partition}:s3:::*'
+          - Effect: Allow
+            Action:
+              - 'logs:CreateLogStream'
+              - 'logs:PutLogEvents'
+            Resource: !Join ['',['arn:', !Ref AWS::Partition, ':logs:', !Ref AWS::Region, ':', !Ref AWS::AccountId, ':log-group:/aws/lambda/', !Ref LambdaFunctionName, ':*']]
+          - Effect: Allow
+            Action:
+              - 'logs:CreateLogGroup'
+            Resource: !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:*'
+        
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Join ['',['/aws/lambda/', !Ref LambdaFunctionName]]
+      RetentionInDays: 30
+            
+  LambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: Lambda function to download
+      FunctionName: !Ref LambdaFunctionName
+      Handler: index.lambda_handler
+      MemorySize: 128
+      Runtime: python3.8
+      Role: !GetAtt 'LambdaRole.Arn'
+      Timeout: 240
+      Environment:
+        Variables:
+          BucketName: !Ref BucketName
+      Code:
+        ZipFile: |
+            # Imports
+            import os
+            import boto3
+            import logging
+            import urllib.request
+            import cfnresponse
+
+            # Set up the logger
+            logger = logging.getLogger()
+            logger.setLevel(logging.INFO)
+            
+            # Env variables from CFN
+            bucketname = os.environ.get('BucketName')
+            
+            CREATE = 'Create'
+            DELETE = 'Delete'
+            response_data = {}
+            
+            def lambda_handler(event, context):
+              try:
+                if event['RequestType'] == CREATE:
+                  url = event['ResourceProperties']['downloadurl']
+                  local_filename = url.split('/')[-1]
+                  lambdafile = '/tmp/' + local_filename
+                  req = urllib.request.urlopen(url)
+                  data = req.read()
+                  with open(lambdafile, 'wb') as out_file:
+                    out_file.write(data)
+                  object_name = os.path.basename(lambdafile)
+                  s3client = boto3.client('s3')
+                  with open(lambdafile, "rb") as f:
+                      s3client.upload_fileobj(f, 'tcsbuckdeb', object_name)
+                  cfnresponse.send(event , context , cfnresponse.SUCCESS , response_data)
+                elif event['RequestType'] == DELETE:
+                  cfnresponse.send(event , context , cfnresponse.SUCCESS , response_data)
+              except Exception as e:
+                print(e)
+                cfnresponse.send(event , context , cfnresponse.FAILED , response_data)
+  CustomResource:
+    Type: Custom::CustomResource
+    Properties:
+      ServiceToken: !GetAtt LambdaFunction.Arn
+      downloadurl: !Ref FileURL
+                
+    
