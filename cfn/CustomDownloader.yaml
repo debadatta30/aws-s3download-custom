@@ -1,7 +1,7 @@
 ---
 AWSTemplateFormatVersion: 2010-09-09
 Description: >
-    CloudFormation template to create a Custom Resource to download a file from a url and upload it to the S3 bucket
+    CloudFormation template to create a Custom Resource to download a file from a url and upload it to the S3 bucket in your aws account
 Parameters:
   LambdaFunctionName:
     Type: String

@@ -13,7 +13,7 @@ Upload Template Files to S3 Bucket:
 
 aws s3 cp . s3://my-bucket/downlader/ --recursive
 
-CloudFormation Stack Creation:
+CloudFormation Stack Creation :
 
 aws cloudformation create-stack \
 --stack-name downloader \
